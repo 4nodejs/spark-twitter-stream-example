@@ -31,10 +31,10 @@ trait TwitterExampleBase {
   val tweets: DStream[Status] =
     TwitterUtils.createStream(streamingContext, None)
 
-  // FIXME There's a smarter way to do this: see the "broadcast-var" branch
-  val uselessWords = load("/stop-words.dat")
-  val positiveWords = load("/pos-words.dat")
-  val negativeWords = load("/neg-words.dat")
+  // Broadcast the words used during processing so that they're not sent around at each computation
+  val uselessWords = sparkContext.broadcast(load("/stop-words.dat"))
+  val positiveWords = sparkContext.broadcast(load("/pos-words.dat"))
+  val negativeWords = sparkContext.broadcast(load("/neg-words.dat"))
   
   def wordsOf(tweet: TweetText): Sentence =
     tweet.split(" ")
@@ -46,15 +46,15 @@ trait TwitterExampleBase {
     sentence.filter(_.matches("[a-z]+"))
   
   def keepMeaningfulWords(sentence: Sentence): Sentence =
-    sentence.filter(!uselessWords.contains(_))
+    sentence.filter(!uselessWords.value.contains(_))
 
   def extractWords(sentence: Sentence): Sentence =
     sentence.map(_.toLowerCase).filter(_.matches("[a-z]+"))
 
   def computeWordScore(word: String): Int =
-    if (positiveWords.contains(word))       1
-    else if (negativeWords.contains(word)) -1
-    else                                    0
+    if (positiveWords.value.contains(word))       1
+    else if (negativeWords.value.contains(word)) -1
+    else                                          0
 
   def computeSentenceScore(words: Sentence): Int =
     words.map(computeWordScore).sum
